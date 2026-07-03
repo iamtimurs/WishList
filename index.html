@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Карта желаний</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Manrope:wght@400;500;600;700&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --ink: #1B1523;
+    --panel: #241B2E;
+    --panel-hover: #2C2138;
+    --gold: #C9A15E;
+    --gold-soft: #C9A15E55;
+    --blush: #E8AEB7;
+    --cream: #F3ECE3;
+    --muted: #B3A3C4;
+    --line: #3A2E48;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 15% 8%, #2A1F38 0%, transparent 45%),
+      radial-gradient(circle at 85% 92%, #241B33 0%, transparent 40%),
+      var(--ink);
+    color:var(--cream);
+    font-family:'Manrope', sans-serif;
+    min-height:100vh;
+    position:relative;
+  }
+  /* subtle starfield */
+  .stars{
+    position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.5;
+    background-image:
+      radial-gradient(1px 1px at 10% 20%, var(--gold-soft), transparent),
+      radial-gradient(1px 1px at 80% 10%, var(--gold-soft), transparent),
+      radial-gradient(1.5px 1.5px at 60% 70%, var(--gold-soft), transparent),
+      radial-gradient(1px 1px at 30% 85%, var(--gold-soft), transparent),
+      radial-gradient(1px 1px at 90% 60%, var(--gold-soft), transparent),
+      radial-gradient(1.5px 1.5px at 45% 35%, var(--gold-soft), transparent),
+      radial-gradient(1px 1px at 20% 55%, var(--gold-soft), transparent);
+    background-size: 100% 100%;
+  }
+  .wrap{
+    position:relative; z-index:1;
+    max-width:920px; margin:0 auto; padding: 56px 22px 100px;
+  }
+  header{ text-align:center; margin-bottom: 40px; }
+  .eyebrow{
+    font-family:'Jost', sans-serif;
+    letter-spacing:.32em; text-transform:uppercase;
+    font-size:11px; color:var(--gold); font-weight:500;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif;
+    font-style:italic; font-weight:600;
+    font-size: clamp(38px, 7vw, 64px);
+    margin: 10px 0 6px;
+    letter-spacing:.01em;
+    background: linear-gradient(120deg, var(--cream), var(--blush) 60%, var(--gold));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .subtitle{ color:var(--muted); font-size:15px; max-width:520px; margin:0 auto; line-height:1.6; }
+
+  .progress-block{ margin: 30px auto 0; max-width:420px; }
+  .progress-label{ display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted); margin-bottom:8px; font-family:'Jost',sans-serif; letter-spacing:.03em;}
+  .progress-track{ height:4px; border-radius:4px; background:var(--line); overflow:hidden; }
+  .progress-fill{ height:100%; background:linear-gradient(90deg, var(--gold), var(--blush)); width:0%; transition:width .5s ease; }
+
+  .name-banner{
+    margin: 26px auto 0; max-width:520px;
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:12px 16px; display:flex; align-items:center; gap:10px; justify-content:center;
+    font-size:13.5px; color:var(--muted);
+  }
+  .name-banner b{ color:var(--cream); font-weight:600; }
+  .name-banner button{
+    background:none; border:none; color:var(--gold); font-size:12.5px; cursor:pointer;
+    text-decoration:underline; font-family:'Manrope',sans-serif; padding:0;
+  }
+
+  .filters{
+    display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
+    margin: 34px 0 30px;
+  }
+  .filter-btn{
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    padding:7px 14px; border-radius:999px; font-size:12.5px; cursor:pointer;
+    font-family:'Jost',sans-serif; letter-spacing:.02em; transition:.2s;
+  }
+  .filter-btn:hover{ border-color:var(--gold); color:var(--cream); }
+  .filter-btn.active{ background:var(--gold); border-color:var(--gold); color:var(--ink); font-weight:600; }
+
+  .category{ margin-bottom:38px; }
+  .category-head{
+    display:flex; align-items:center; gap:14px; margin-bottom:16px;
+  }
+  .category-head .num{
+    font-family:'Cormorant Garamond', serif; font-style:italic; color:var(--gold);
+    font-size:20px; min-width:24px;
+  }
+  .category-head h2{
+    font-family:'Manrope',sans-serif; font-weight:700; font-size:13px;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--cream);
+    margin:0;
+  }
+  .category-head .rule{ flex:1; height:1px; background:var(--line); }
+
+  .grid{ display:grid; grid-template-columns:1fr; gap:12px; }
+  @media (min-width:640px){ .grid{ grid-template-columns:1fr 1fr; } }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:16px 16px 16px 18px;
+    display:flex; align-items:center; gap:14px;
+    transition:.25s ease;
+    position:relative;
+    overflow:hidden;
+  }
+  .card:hover{ background:var(--panel-hover); border-color:var(--gold-soft); transform:translateY(-1px); }
+  .card.booked{ border-color:var(--gold-soft); }
+  .card.booked::before{
+    content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:linear-gradient(180deg, var(--gold), var(--blush));
+  }
+
+  .card-text{ flex:1; min-width:0; }
+  .card-text p{ margin:0; font-size:14.5px; line-height:1.45; color:var(--cream); }
+  .card.booked .card-text p{ color:var(--muted); }
+  .booked-tag{
+    display:block; margin-top:5px; font-size:11.5px; color:var(--gold);
+    font-family:'Jost',sans-serif; letter-spacing:.02em;
+  }
+
+  .book-btn{
+    flex-shrink:0;
+    border:1px solid var(--gold-soft);
+    background:transparent;
+    color:var(--gold);
+    font-family:'Jost', sans-serif;
+    font-size:12px; letter-spacing:.03em;
+    padding:9px 14px;
+    border-radius:999px;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:.2s;
+    position:relative;
+  }
+  .book-btn:hover{ background:var(--gold); color:var(--ink); }
+  .book-btn.is-booked{
+    background:linear-gradient(120deg, var(--gold), var(--blush));
+    color:var(--ink); border-color:transparent; font-weight:700;
+  }
+  .book-btn.is-booked:hover{ opacity:.85; }
+  .book-btn.disabled{ opacity:.55; cursor:default; }
+  .book-btn.disabled:hover{ background:transparent; color:var(--gold); }
+
+  .sparkle{
+    position:absolute; pointer-events:none; font-size:14px; color:var(--gold);
+    animation: pop .7s ease forwards;
+  }
+  @keyframes pop{
+    0%{ transform:translate(0,0) scale(.4); opacity:1; }
+    100%{ transform:translate(var(--tx), var(--ty)) scale(1.1); opacity:0; }
+  }
+
+  footer{
+    text-align:center; margin-top:60px; color:var(--muted); font-size:12.5px;
+    font-family:'Jost',sans-serif;
+  }
+  footer .heart{ color:var(--blush); }
+
+  .modal-overlay{
+    position:fixed; inset:0; background:#0F0A16CC; backdrop-filter:blur(3px);
+    display:flex; align-items:center; justify-content:center; z-index:50;
+    padding:20px;
+  }
+  .modal{
+    background:var(--panel); border:1px solid var(--line); border-radius:18px;
+    padding:28px; max-width:360px; width:100%; text-align:center;
+  }
+  .modal h3{ font-family:'Cormorant Garamond', serif; font-style:italic; font-size:24px; margin:0 0 8px; color:var(--cream); }
+  .modal p{ color:var(--muted); font-size:13.5px; margin:0 0 18px; line-height:1.5; }
+  .modal input{
+    width:100%; padding:11px 14px; border-radius:10px; border:1px solid var(--line);
+    background:var(--ink); color:var(--cream); font-family:'Manrope',sans-serif; font-size:14px;
+    margin-bottom:14px;
+  }
+  .modal input:focus{ outline:none; border-color:var(--gold); }
+  .modal-actions{ display:flex; gap:10px; }
+  .modal-actions button{
+    flex:1; padding:10px; border-radius:10px; border:none; cursor:pointer;
+    font-family:'Jost',sans-serif; font-size:13px;
+  }
+  .modal-actions .primary{ background:linear-gradient(120deg, var(--gold), var(--blush)); color:var(--ink); font-weight:700; }
+  .modal-actions .secondary{ background:transparent; border:1px solid var(--line); color:var(--muted); }
+
+  .empty{ text-align:center; color:var(--muted); padding:30px; font-size:13.5px; }
+</style>
+</head>
+<body>
+<div class="stars"></div>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Личная коллекция желаний</div>
+    <h1>Карта желаний</h1>
+    <p class="subtitle">Отмечайте, что уже дарите — так никто не подарит одно и то же дважды. Спасибо, что вы рядом ✨</p>
+    <div class="progress-block">
+      <div class="progress-label"><span id="progressText">0 из 0 забронировано</span><span id="progressPct">0%</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+  </header>
+
+  <div class="name-banner" id="nameBanner"></div>
+
+  <div class="filters" id="filters"></div>
+
+  <div id="categories"></div>
+
+  <footer>сделано с <span class="heart">♥</span> — бронируйте смело</footer>
+</div>
+
+<script>
+// ====== НАСТРОЙКА FIREBASE ======
+// Вставьте сюда конфиг из вашего проекта Firebase (см. README.md, шаг 2).
+const firebaseConfig = {
+  apiKey: "ВСТАВЬТЕ_СЮДА",
+  authDomain: "ВСТАВЬТЕ_СЮДА",
+  databaseURL: "ВСТАВЬТЕ_СЮДА",
+  projectId: "ВСТАВЬТЕ_СЮДА",
+  storageBucket: "ВСТАВЬТЕ_СЮДА",
+  messagingSenderId: "ВСТАВЬТЕ_СЮДА",
+  appId: "ВСТАВЬТЕ_СЮДА"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+// ====== КОНЕЦ НАСТРОЙКИ ======
+
+const CATEGORIES = [
+  {
+    name: "Техника и гаджеты",
+    items: [
+      "Фотоаппарат Canon G7X Mark II",
+      "Айпад с большим количеством памяти",
+      "Клавиатуру на айпад",
+      "Читалка",
+      "Очки с камерой и ИИ, или просто пиздатые солнцезащитные хамелеоны"
+    ]
+  },
+  {
+    name: "Украшения и аксессуары",
+    items: [
+      "Украшения (серебро / натуральные природные камни / модные самоцветы)",
+      "Часы",
+      "Сумка",
+      "Любые крутые аксессуары",
+      "Шкатулка для украшений",
+      "Обложка на паспорт"
+    ]
+  },
+  {
+    name: "Красота и уход",
+    items: [
+      "Духи",
+      "LED маска для лица",
+      "Вакуумный массажер",
+      "Консультация у проверенного пиздатого косметолога-дерматолога с подбором ухода",
+      "Уход для волос (рабочий крем для кудрявых волос)",
+      "Спа для волос / стрижка",
+      "Зелёные пэды, оранжевый крем с ниацинамидом и серый тонер от Selmiacs",
+      "Мастеркласс по макияжу",
+      "Мастеркласс по созданию духов",
+      "Генетический тест",
+      "Прививка от ВПЧ",
+      "«Ингалятор», чтобы бросить курилки"
+    ]
+  },
+  {
+    name: "Дом и гардероб",
+    items: [
+      "Сертификаты на одежду и в ЗЯ",
+      "Наборы базового белья и много белых коротких носков",
+      "Органайзеры для одежды в шкаф",
+      "Расписная или с красивым необычным принтом толстовка / футболка",
+      "Хорошую книгу / что-то для уюта",
+      "Набор для карты желаний",
+      "Временные тату everink",
+      "Халат / хирургичка"
+    ]
+  },
+  {
+    name: "Спорт и wellness",
+    items: [
+      "Корсет для спины",
+      "Набор для фитнеса дома (мячики для массажа, ролл)",
+      "Спа с массажем",
+      "Фонендоскоп хороший"
+    ]
+  },
+  {
+    name: "Впечатления",
+    items: [
+      "Билеты на «Кабалу святош» и концерт Мота",
+      "Уроки по игре на клавишах",
+      "Поездка во Вьетнам",
+      "Пострелять сходить",
+      "Прыжок с парашютом",
+      "Покататься на гидроцикле / вэйксерфе",
+      "Погонять на гоночной машине / картинг",
+      "Поездка на Формулу 1 в Абу-Даби"
+    ]
+  },
+  {
+    name: "Большие мечты",
+    items: [
+      "Порше 911",
+      "Квартира в хорошем районе с красивым видом"
+    ]
+  }
+];
+
+// build flat item list with stable ids
+const ITEMS = [];
+CATEGORIES.forEach((cat, ci) => {
+  cat.items.forEach((text, ii) => {
+    ITEMS.push({ id: `c${ci}i${ii}`, text, cat: ci });
+  });
+});
+
+let bookings = {}; // id -> name
+let myName = null;
+let activeFilter = "all";
+
+const NAME_KEY = "wishlist-my-name-v1";
+
+function loadData(){
+  // имя бронирующего храним локально в этом браузере
+  myName = localStorage.getItem(NAME_KEY) || null;
+  renderNameBanner();
+  renderFilters();
+  renderProgress();
+
+  // бронирования храним в Firebase и слушаем изменения в реальном времени,
+  // чтобы у всех друзей список обновлялся сразу, без перезагрузки страницы
+  db.ref("bookings").on("value", (snapshot) => {
+    bookings = snapshot.val() || {};
+    renderCategories();
+    renderProgress();
+  }, (err) => {
+    console.error("Firebase read failed", err);
+    document.getElementById("categories").innerHTML =
+      '<div class="empty">Не удалось подключиться к базе бронирований. Проверьте firebaseConfig в index.html.</div>';
+  });
+}
+
+async function saveBooking(id, name){
+  try{
+    if(name){
+      await db.ref("bookings/" + id).set(name);
+    } else {
+      await db.ref("bookings/" + id).remove();
+    }
+  }catch(e){ console.error("save failed", e); }
+}
+
+function saveName(name){
+  localStorage.setItem(NAME_KEY, name);
+}
+
+function renderNameBanner(){
+  const el = document.getElementById("nameBanner");
+  if(myName){
+    el.innerHTML = `Вы бронируете как <b>${escapeHtml(myName)}</b> · <button onclick="changeName()">изменить имя</button>`;
+  } else {
+    el.innerHTML = `Забронируйте подарок — при первом клике мы спросим ваше имя, чтобы остальные видели, кто дарит.`;
+  }
+}
+
+function changeName(){
+  askName(true);
+}
+
+function renderFilters(){
+  const el = document.getElementById("filters");
+  const buttons = [`<button class="filter-btn ${activeFilter==='all'?'active':''}" data-f="all">Все</button>`]
+    .concat(CATEGORIES.map((c,i)=>`<button class="filter-btn ${activeFilter===String(i)?'active':''}" data-f="${i}">${c.name}</button>`));
+  el.innerHTML = buttons.join("");
+  el.querySelectorAll(".filter-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      activeFilter = btn.dataset.f;
+      renderFilters();
+      renderCategories();
+    });
+  });
+}
+
+function renderProgress(){
+  const total = ITEMS.length;
+  const done = Object.keys(bookings).filter(k => bookings[k]).length;
+  const pct = total ? Math.round((done/total)*100) : 0;
+  document.getElementById("progressText").textContent = `${done} из ${total} забронировано`;
+  document.getElementById("progressPct").textContent = `${pct}%`;
+  document.getElementById("progressFill").style.width = pct + "%";
+}
+
+function renderCategories(){
+  const el = document.getElementById("categories");
+  el.innerHTML = "";
+  CATEGORIES.forEach((cat, ci)=>{
+    if(activeFilter !== "all" && activeFilter !== String(ci)) return;
+    const catItems = ITEMS.filter(it => it.cat === ci);
+    const wrap = document.createElement("div");
+    wrap.className = "category";
+    wrap.innerHTML = `
+      <div class="category-head">
+        <span class="num">${String(ci+1).padStart(2,'0')}</span>
+        <h2>${cat.name}</h2>
+        <div class="rule"></div>
+      </div>
+      <div class="grid">
+        ${catItems.map(renderCard).join("")}
+      </div>
+    `;
+    el.appendChild(wrap);
+  });
+  // attach handlers
+  el.querySelectorAll(".book-btn").forEach(btn=>{
+    btn.addEventListener("click", (e)=> handleBook(e, btn.dataset.id));
+  });
+}
+
+function renderCard(item){
+  const bookedBy = bookings[item.id];
+  const isMine = bookedBy && myName && bookedBy === myName;
+  return `
+    <div class="card ${bookedBy ? 'booked':''}">
+      <div class="card-text">
+        <p>${escapeHtml(item.text)}</p>
+        ${bookedBy ? `<span class="booked-tag">✦ дарит ${escapeHtml(bookedBy)}</span>` : ``}
+      </div>
+      <button class="book-btn ${bookedBy ? 'is-booked':''} ${bookedBy && !isMine ? 'disabled':''}" data-id="${item.id}">
+        ${bookedBy ? (isMine ? 'Отменить' : 'Занято') : 'Забронировать'}
+      </button>
+    </div>
+  `;
+}
+
+function escapeHtml(str){
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+async function handleBook(e, id){
+  const bookedBy = bookings[id];
+  if(bookedBy && bookedBy !== myName){
+    return; // taken by someone else, disabled anyway
+  }
+  if(!myName){
+    const name = await askName(false);
+    if(!name) return;
+  }
+  if(bookings[id] === myName){
+    await saveBooking(id, null);
+  } else {
+    await saveBooking(id, myName);
+    spawnSparkle(e.currentTarget);
+  }
+  // renderCategories()/renderProgress() будут вызваны автоматически
+  // через слушатель db.ref("bookings").on("value", ...)
+}
+
+function spawnSparkle(btn){
+  const rect = btn.getBoundingClientRect();
+  for(let i=0;i<6;i++){
+    const s = document.createElement("div");
+    s.className = "sparkle";
+    s.textContent = "✦";
+    s.style.left = (rect.left + rect.width/2) + "px";
+    s.style.top = (rect.top + rect.height/2) + "px";
+    const angle = (Math.PI*2/6)*i;
+    s.style.setProperty("--tx", Math.cos(angle)*40+"px");
+    s.style.setProperty("--ty", Math.sin(angle)*40+"px");
+    document.body.appendChild(s);
+    setTimeout(()=> s.remove(), 700);
+  }
+}
+
+function askName(forceChange){
+  return new Promise((resolve)=>{
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal">
+        <h3>Как вас зовут?</h3>
+        <p>Имя увидят остальные, чтобы знать, кто уже что дарит.</p>
+        <input type="text" id="nameInput" placeholder="Ваше имя" value="${myName ? escapeHtml(myName) : ''}" />
+        <div class="modal-actions">
+          <button class="secondary" id="cancelName">Отмена</button>
+          <button class="primary" id="saveName">Сохранить</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector("#nameInput");
+    input.focus();
+    const cleanup = (val)=>{ overlay.remove(); resolve(val); };
+    overlay.querySelector("#cancelName").addEventListener("click", ()=> cleanup(null));
+    overlay.querySelector("#saveName").addEventListener("click", async ()=>{
+      const val = input.value.trim();
+      if(!val){ input.focus(); return; }
+      myName = val;
+      saveName(val);
+      renderNameBanner();
+      renderCategories();
+      cleanup(val);
+    });
+    input.addEventListener("keydown", (ev)=>{
+      if(ev.key === "Enter") overlay.querySelector("#saveName").click();
+    });
+  });
+}
+
+loadData();
+</script>
+</body>
+</html>
